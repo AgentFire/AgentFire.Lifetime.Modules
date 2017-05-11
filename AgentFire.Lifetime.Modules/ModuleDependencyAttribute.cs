@@ -2,7 +2,7 @@
 
 namespace AgentFire.Lifetime.Modules
 {
-    [AttributeUsage(AttributeTargets.Class, AllowMultiple = false, Inherited = false)]
+    [AttributeUsage(AttributeTargets.Class, AllowMultiple = true, Inherited = true)]
     public sealed class ModuleDependencyAttribute : Attribute
     {
         public Type DependsOn { get; }

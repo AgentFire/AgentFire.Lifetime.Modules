@@ -4,12 +4,12 @@ namespace AgentFire.Lifetime.Modules
 {
     public abstract class ModuleBase : IModule
     {
-        public virtual bool AutoStart => true;
-        public virtual bool IsRunning { get; private set; } = false;
+        public virtual bool AutoStart { get; protected set; } = true;
+        public virtual bool IsRunning { get; protected set; } = false;
 
         public virtual void Initialize(IModuleStartContext context)
         {
-            foreach (var attr in GetType().GetCustomAttributes<ModuleDependencyAttribute>())
+            foreach (var attr in GetType().GetCustomAttributes<ModuleDependencyAttribute>(true))
             {
                 context.RequireDependency(attr.DependsOn);
             }
@@ -21,22 +21,27 @@ namespace AgentFire.Lifetime.Modules
 
         public virtual void Restart()
         {
-            if (IsRunning)
-            {
-                Stop();
-            }
-
+            Stop();
             Start();
         }
 
         public virtual void Start()
         {
+            if (IsRunning)
+            {
+                return;
+            }
+
             StartInternal();
             IsRunning = true;
         }
-
         public virtual void Stop()
         {
+            if (!IsRunning)
+            {
+                return;
+            }
+
             StopInternal();
             IsRunning = false;
         }
