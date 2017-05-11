@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<package>
+  <metadata>
+    <id>AgentFire.Lifetime.Modules</id>
+    <version>1.0.0.0</version>
+    <title>Lifetime Modules</title>
+    <authors>AgentFire</authors>
+    <owners>AgentFire</owners>
+    <projectUrl>https://github.com/AgentFire/AgentFire.Lifetime.Modules</projectUrl>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <description>Provides a way for an app to use module-based (Start/Stop) singleton instances.</description>
+    <releaseNotes>First release.</releaseNotes>
+    <copyright>Copyright (c) AgentFire</copyright>
+    <tags>dependency start stop module lifetime</tags>
+  </metadata>
+</package>
