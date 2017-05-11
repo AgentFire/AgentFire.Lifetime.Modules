@@ -114,7 +114,7 @@ namespace AgentFire.Lifetime.Modules
         {
             foreach (IModule module in GetRunningModules())
             {
-                module.Stop();
+                module.Stop();//
             }
         }
 
