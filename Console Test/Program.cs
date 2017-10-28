@@ -10,11 +10,11 @@ namespace AgentFire.Lifetime.Modules.Test
     {
         protected override void StartInternal()
         {
-            Console.WriteLine("M1 start");
+            Console.WriteLine("M1 (of M3) start");
         }
         public override void Stop()
         {
-            Console.WriteLine("M1d stop");
+            Console.WriteLine("M1 (of M3) stop");
         }
     }
 
@@ -23,11 +23,11 @@ namespace AgentFire.Lifetime.Modules.Test
     {
         protected override void StartInternal()
         {
-            Console.WriteLine("M2 start");
+            Console.WriteLine("M2 (of M4) start");
         }
         public override void Stop()
         {
-            Console.WriteLine("M2 stop");
+            Console.WriteLine("M2 (of M4) stop");
         }
     }
     [ModuleDependency(typeof(M2))]
@@ -35,11 +35,11 @@ namespace AgentFire.Lifetime.Modules.Test
     {
         protected override void StartInternal()
         {
-            Console.WriteLine("M3 start");
+            Console.WriteLine("M3 (of M2) start");
         }
         public override void Stop()
         {
-            Console.WriteLine("M3 stop");
+            Console.WriteLine("M3 (of M2) stop");
         }
     }
 
@@ -48,11 +48,11 @@ namespace AgentFire.Lifetime.Modules.Test
     {
         protected override void StartInternal()
         {
-            Console.WriteLine("M4 start");
+            Console.WriteLine("M4 (of M4) start");
         }
         public override void Stop()
         {
-            Console.WriteLine("M4 stop");
+            Console.WriteLine("M4 (of M4) stop");
         }
 
         public override bool IsRunning => true;

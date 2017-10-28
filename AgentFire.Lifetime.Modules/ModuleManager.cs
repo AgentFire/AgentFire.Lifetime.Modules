@@ -25,6 +25,13 @@ namespace AgentFire.Lifetime.Modules
         {
             StartInternal(assemblyWithModules);
         }
+        /// <summary>
+        /// Starts all Auto-Start modules from a specified set of assemblies.
+        /// </summary>
+        public void Start(params Assembly[] assembliesWithModules)
+        {
+            StartInternal(assembliesWithModules);
+        }
 
         /// <summary>
         /// Stops all running modules.
@@ -34,17 +41,18 @@ namespace AgentFire.Lifetime.Modules
             StopInternal();
         }
 
-        private readonly Dictionary<Type, ModuleStartContext> _allModules = new Dictionary<Type, ModuleStartContext>();
+        private readonly List<ModuleStartContext> _allModules = new List<ModuleStartContext>();
 
         public IEnumerable<IModule> GetRunningModules()
         {
-            return _allModules.Values.Select(T => T.Module).Where(T => T.IsRunning);
+            return _allModules.Select(T => T.Module).Where(T => T.IsRunning);
         }
 
-        private void StartInternal(Assembly assemblyWithModules)
+        private void StartInternal(params Assembly[] assembliesWithModules)
         {
-            var query = from type in assemblyWithModules.DefinedTypes
-                        where !_allModules.ContainsKey(type)
+            var query = from ass in assembliesWithModules
+                        from type in ass.DefinedTypes
+                        where _allModules.All(T => T.ModuleType != type)
                         where !type.IsAbstract
                         where typeof(IModule).IsAssignableFrom(type)
                         let c = type.GetConstructor(Type.EmptyTypes)
@@ -65,20 +73,20 @@ namespace AgentFire.Lifetime.Modules
 
         private void EnsureLoaded(IModule module)
         {
-            if (_allModules.ContainsKey(module.GetType()))
+            if (_allModules.Any(T => T.Module == module))
             {
                 return;
             }
 
             ModuleStartContext context = new ModuleStartContext(module);
             module.Initialize(context);
-            _allModules[module.GetType()] = context;
+            _allModules.Add(context);
 
             foreach (Type moduleType in context.RequiredDependencies)
             {
-                ModuleStartContext mc;
+                ModuleStartContext mc = _allModules.Where(T => T.ModuleType == moduleType).SingleOrDefault();
 
-                if (!_allModules.TryGetValue(moduleType, out mc))
+                if (mc == null)
                 {
                     IModule m = (IModule)Activator.CreateInstance(moduleType);
                     EnsureLoaded(m);
@@ -92,12 +100,12 @@ namespace AgentFire.Lifetime.Modules
         {
             if (hashSet.Contains(module))
             {
-                throw new InvalidOperationException("Circular dependencies are not allowed.");
+                throw new InvalidOperationException("I've detected a circular module dependency. How dare you.");
             }
 
             hashSet.Add(module);
 
-            foreach (IModule dependency in _allModules[module.GetType()].RequiredDependencies.Select(T => _allModules[T].Module))
+            foreach (IModule dependency in _allModules.Where(T => T.Module == module).Single().RequiredDependencies.Select(T => _allModules.Where(W => W.ModuleType == T).Single().Module))
             {
                 if (!dependency.IsRunning)
                 {
@@ -121,7 +129,7 @@ namespace AgentFire.Lifetime.Modules
         public T TryGetModule<T>(bool onlyIfRunning = true) where T : IModule
         {
             ModuleStartContext c;
-            T module = _allModules.TryGetValue(typeof(T), out c) ? (T)c.Module : default(T);
+            T module = _allModules.Where(W => W.ModuleType == typeof(T)).Select(W => (T)W.Module).SingleOrDefault();
 
             if (onlyIfRunning && module != null && !module.IsRunning)
             {

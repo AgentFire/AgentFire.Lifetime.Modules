@@ -5,12 +5,14 @@ namespace AgentFire.Lifetime.Modules
 {
     internal sealed class ModuleStartContext : IModuleStartContext
     {
+        internal Type ModuleType { get; }
         internal IModule Module { get; }
         public HashSet<Type> RequiredDependencies { get; } = new HashSet<Type>();
 
         public ModuleStartContext(IModule module)
         {
             Module = module;
+            ModuleType = Module.GetType();
         }
 
         public void RequireDependency<T>() where T : IModule
