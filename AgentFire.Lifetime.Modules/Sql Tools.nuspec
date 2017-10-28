@@ -2,14 +2,14 @@
 <package>
   <metadata>
     <id>AgentFire.Lifetime.Modules</id>
-    <version>1.0.4</version>
+    <version>1.0.5</version>
     <title>Lifetime Modules</title>
     <authors>AgentFire</authors>
     <owners>AgentFire</owners>
     <projectUrl>https://github.com/AgentFire/AgentFire.Lifetime.Modules</projectUrl>
     <requireLicenseAcceptance>false</requireLicenseAcceptance>
     <description>Provides a way for an app to use module-based (Start/Stop) singleton instances.</description>
-    <releaseNotes>Module stop order is now the startup order (so if A depends on B, then B starts first and stops first).</releaseNotes>
+    <releaseNotes>Module stop order is now the startup order, but reveersed (so if A depends on B, then B starts first and A stops first).</releaseNotes>
     <copyright>Copyright (c) AgentFire</copyright>
     <tags>dependency start stop module lifetime</tags>
   </metadata>

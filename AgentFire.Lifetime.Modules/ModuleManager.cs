@@ -120,7 +120,7 @@ namespace AgentFire.Lifetime.Modules
 
         private void StopInternal()
         {
-            foreach (IModule module in GetRunningModules())
+            foreach (IModule module in GetRunningModules().Reverse())
             {
                 module.Stop();//
             }
