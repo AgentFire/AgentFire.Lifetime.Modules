@@ -1,52 +1,67 @@
-﻿using System.Reflection;
+﻿using System;
+using System.Reflection;
+using System.Threading.Tasks;
 
 namespace AgentFire.Lifetime.Modules
 {
     public abstract class ModuleBase : IModule
     {
-        public virtual bool AutoStart { get; protected set; } = true;
-        public virtual bool IsRunning { get; protected set; } = false;
+        public bool IsRunning { get; private set; } = false;
 
-        public virtual void Initialize(IModuleStartContext context)
+        /// <summary>
+        /// Base method iterates over <see cref="ModuleDependencyAttribute"/> attributes in current type and calls <see cref="IDependencyResolverContext.RequireDependency"/> for them.
+        /// </summary>
+        public virtual Task ResolveDependencies(IDependencyResolverContext context)
         {
             foreach (var attr in GetType().GetCustomAttributes<ModuleDependencyAttribute>(true))
             {
                 context.RequireDependency(attr.DependsOn);
             }
+
+            return Task.CompletedTask;
         }
 
-        protected ModuleBase()
-        {
-        }
+        protected ModuleBase() { }
 
-        public virtual void Restart()
-        {
-            Stop();
-            Start();
-        }
+        private readonly object _startStopLock = new object();
+        private bool _isStartingOrStopping = false;
 
-        public virtual void Start()
+        protected virtual Task StartInternal() => Task.CompletedTask;
+        protected virtual Task StopInternal() => Task.CompletedTask;
+
+        public async Task Start()
         {
-            if (IsRunning)
+            lock (_startStopLock)
             {
-                return;
+                if (IsRunning && _isStartingOrStopping)
+                {
+                    throw new InvalidOperationException("Your previous call on this method has not yet finished.");
+                }
+
+                _isStartingOrStopping = true;
             }
 
-            StartInternal();
+            await StartInternal().ConfigureAwait(false);
+
             IsRunning = true;
+            _isStartingOrStopping = false;
         }
-        public virtual void Stop()
+        public async Task Stop()
         {
-            if (!IsRunning)
+            lock (_startStopLock)
             {
-                return;
+                if (!IsRunning && _isStartingOrStopping)
+                {
+                    throw new InvalidOperationException("Your previous call on this method has not yet finished.");
+                }
+
+                _isStartingOrStopping = true;
             }
 
-            StopInternal();
-            IsRunning = false;
-        }
+            await StopInternal().ConfigureAwait(false);
 
-        protected virtual void StartInternal() { }
-        protected virtual void StopInternal() { }
+            IsRunning = false;
+            _isStartingOrStopping = false;
+        }
     }
 }

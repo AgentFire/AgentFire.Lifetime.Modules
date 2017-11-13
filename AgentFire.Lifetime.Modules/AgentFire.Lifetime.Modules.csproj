@@ -9,7 +9,7 @@
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>AgentFire.Lifetime.Modules</RootNamespace>
     <AssemblyName>AgentFire.Lifetime.Modules</AssemblyName>
-    <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
+    <TargetFrameworkVersion>v4.7</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <TargetFrameworkProfile />
   </PropertyGroup>
@@ -38,19 +38,23 @@
     <Reference Include="Microsoft.CSharp" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Components\DependencyGraph.cs" />
+    <Compile Include="Components\DependencyItem.cs" />
+    <Compile Include="Extensions.cs" />
     <Compile Include="IModule.cs" />
-    <Compile Include="IModuleStartContext.cs" />
+    <Compile Include="IDependencyResolverContext.cs" />
     <Compile Include="ModuleBase.cs" />
     <Compile Include="ModuleDependencyAttribute.cs" />
     <Compile Include="ModuleManager.cs" />
-    <Compile Include="ModuleStartContext.cs" />
+    <Compile Include="DependencyResolverContext.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="Sql Tools.nuspec">
+    <None Include="Nuget Specs.nuspec">
       <SubType>Designer</SubType>
     </None>
   </ItemGroup>
+  <ItemGroup />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
        Other similar extension points exist, see Microsoft.Common.targets.

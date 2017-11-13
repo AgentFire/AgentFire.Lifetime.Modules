@@ -1,7 +1,10 @@
-﻿using System;
+﻿using AgentFire.Lifetime.Modules.Components;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace AgentFire.Lifetime.Modules
 {
@@ -14,129 +17,177 @@ namespace AgentFire.Lifetime.Modules
         /// <summary>
         /// Starts all Auto-Start modules from a calling assembly.
         /// </summary>
-        public void Start()
+        public Task Start()
         {
-            Start(Assembly.GetCallingAssembly());
+            return Start(Assembly.GetCallingAssembly());
         }
         /// <summary>
         /// Starts all Auto-Start modules from a specified assembly.
         /// </summary>
-        public void Start(Assembly assemblyWithModules)
+        public Task Start(Assembly assemblyWithModules)
         {
-            StartInternal(assemblyWithModules);
+            return Start(new[] { assemblyWithModules });
         }
         /// <summary>
         /// Starts all Auto-Start modules from a specified set of assemblies.
         /// </summary>
-        public void Start(params Assembly[] assembliesWithModules)
+        public Task Start(params Assembly[] assembliesWithModules)
         {
-            StartInternal(assembliesWithModules);
+            return StartInternal(assembliesWithModules);
+        }
+        /// <summary>
+        /// Starts all Auto-Start modules from a specified set of assemblies.
+        /// </summary>
+        public Task Start(IEnumerable<Assembly> assembliesWithModules)
+        {
+            return StartInternal(assembliesWithModules);
         }
 
         /// <summary>
         /// Stops all running modules.
         /// </summary>
-        public void Stop()
+        public Task Shutdown()
         {
-            StopInternal();
+            return StopInternal();
         }
 
-        private readonly List<ModuleStartContext> _allModules = new List<ModuleStartContext>();
+        private bool _isRunning = false;
+        private readonly object _startStopLock = new object();
 
-        public IEnumerable<IModule> GetRunningModules()
-        {
-            return _allModules.Select(T => T.Module).Where(T => T.IsRunning);
-        }
+        private Dictionary<Type, IModule> _moduleDic = null;
+        private DependencyGraph<IModule> _graph = null;
 
-        private void StartInternal(params Assembly[] assembliesWithModules)
+        private static async Task<(DependencyGraph<IModule> graph, Dictionary<Type, IModule> moduleDic)> LoadDependencyGraph(IEnumerable<Assembly> assembliesWithModules)
         {
+            Dictionary<Type, IModule> dic = new Dictionary<Type, IModule>();
+
+            IModule TryInstantiateAsModule(Type type)
+            {
+                lock (dic)
+                {
+                    if (dic.TryGetValue(type, out IModule m))
+                    {
+                        return m;
+                    }
+
+                    if (type.IsAbstract || !typeof(IModule).IsAssignableFrom(type))
+                    {
+                        return null;
+                    }
+
+                    ConstructorInfo c = type.GetConstructor(Type.EmptyTypes);
+
+                    if (c == null)
+                    {
+                        return null;
+                    }
+
+                    m = (IModule)c.Invoke(null);
+                    dic[type] = m;
+                    return m;
+                }
+            }
+
             var query = from ass in assembliesWithModules
                         from type in ass.DefinedTypes
-                        where _allModules.All(T => T.ModuleType != type)
-                        where !type.IsAbstract
-                        where typeof(IModule).IsAssignableFrom(type)
-                        let c = type.GetConstructor(Type.EmptyTypes)
-                        where c != null
-                        let instance = (IModule)c.Invoke(null)
-                        select instance;
+                        let i = TryInstantiateAsModule(type)
+                        where i != null
+                        let context = new DependencyResolverContext(i)
+                        select i.ResolveDependencies(context).ContinueWith(_ => new
+                        {
+                            Module = i,
+                            DependsOn = (from d in context.RequiredDependencies
+                                         let di = TryInstantiateAsModule(d)
+                                         where di != null
+                                         select di).ToList()
+                        });
 
-            foreach (IModule module in query)
-            {
-                EnsureLoaded(module);
+            var qResult = await Task.WhenAll(query).ConfigureAwait(false);
+            Dictionary<IModule, List<IModule>> graphDic = qResult.ToDictionary(T => T.Module, T => T.DependsOn);
 
-                if (module.AutoStart && !module.IsRunning)
-                {
-                    StartModule(module, new HashSet<IModule>());
-                }
-            }
+            return (new DependencyGraph<IModule>(graphDic.Select(T => T.Key), T => graphDic[T]), dic);
         }
 
-        private void EnsureLoaded(IModule module)
+        private async Task StartInternal(IEnumerable<Assembly> assembliesWithModules)
         {
-            if (_allModules.Any(T => T.Module == module))
+            lock (_startStopLock)
             {
-                return;
-            }
-
-            ModuleStartContext context = new ModuleStartContext(module);
-            module.Initialize(context);
-            _allModules.Add(context);
-
-            foreach (Type moduleType in context.RequiredDependencies)
-            {
-                ModuleStartContext mc = _allModules.Where(T => T.ModuleType == moduleType).SingleOrDefault();
-
-                if (mc == null)
+                if (_isRunning)
                 {
-                    IModule m = (IModule)Activator.CreateInstance(moduleType);
-                    EnsureLoaded(m);
+                    throw new InvalidOperationException("Already running.");
                 }
 
-                // No StackOverflow exception due to the actual adding them in the previous line.
+                _isRunning = true;
             }
+
+            var data = await LoadDependencyGraph(assembliesWithModules).ConfigureAwait(false);
+
+            _graph = data.graph;
+            _moduleDic = data.moduleDic;
+
+            await UseGraph(_graph.Graph, true).ConfigureAwait(false);
         }
 
-        private void StartModule(IModule module, HashSet<IModule> hashSet)
+        private static Task UseGraph(IReadOnlyList<DependencyItem<IModule>> graph, bool isStartMode)
         {
-            if (hashSet.Contains(module))
-            {
-                throw new InvalidOperationException("I've detected a circular module dependency. How dare you.");
-            }
+            Dictionary<IModule, Task> _dic = new Dictionary<IModule, Task>();
 
-            hashSet.Add(module);
-
-            foreach (IModule dependency in _allModules.Where(T => T.Module == module).Single().RequiredDependencies.Select(T => _allModules.Where(W => W.ModuleType == T).Single().Module))
+            Task UseModule(DependencyItem<IModule> di)
             {
-                if (!dependency.IsRunning)
+                // Double-check locking.
+
+                if (!_dic.TryGetValue(di.Value, out Task t))
                 {
-                    StartModule(dependency, hashSet);
+                    lock (_dic)
+                    {
+                        if (!_dic.TryGetValue(di.Value, out t))
+                        {
+                            _dic[di.Value] = t = Task.Run(async () =>
+                            {
+                                var q = from d in di.DependsOn
+                                        select UseModule(d);
+
+                                await Task.WhenAll(q).ConfigureAwait(false);
+
+                                if (isStartMode)
+                                {
+                                    await di.Value.Start().ConfigureAwait(false);
+                                }
+                                else
+                                {
+                                    await di.Value.Stop().ConfigureAwait(false);
+                                }
+                            });
+                        }
+                    }
                 }
+
+                return t;
             }
 
-            module.Start();
+            var query = from di in graph
+                        select UseModule(di);
 
-            hashSet.Remove(module);
+            return Task.WhenAll(query);
         }
 
-        private void StopInternal()
+        private async Task StopInternal()
         {
-            foreach (IModule module in GetRunningModules().Reverse())
+            lock (_startStopLock)
             {
-                module.Stop();//
-            }
-        }
+                if (!_isRunning)
+                {
+                    throw new InvalidOperationException("Not running.");
+                }
 
-        public T TryGetModule<T>(bool onlyIfRunning = true) where T : IModule
-        {
-            ModuleStartContext c;
-            T module = _allModules.Where(W => W.ModuleType == typeof(T)).Select(W => (T)W.Module).SingleOrDefault();
-
-            if (onlyIfRunning && module != null && !module.IsRunning)
-            {
-                return default(T);
+                _isRunning = false;
             }
 
-            return module;
+            await UseGraph(_graph.ReversedGraph, false).ConfigureAwait(false);
+            _graph = null;
+            _moduleDic = null;
         }
+
+        public T TryGetModule<T>() where T : IModule => _moduleDic.TryGetValue(typeof(T), out IModule result) ? (T)result : default(T);
     }
 }

@@ -2,75 +2,109 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading.Tasks;
 
 namespace AgentFire.Lifetime.Modules.Test
 {
-    [ModuleDependency(typeof(M3))]
-    public sealed class M1 : ModuleBase
+    public abstract class ModuleTestBase : ModuleBase
     {
-        protected override void StartInternal()
+        protected override sealed async Task StartInternal()
         {
-            Console.WriteLine("M1 (of M3) start");
+            //Console.WriteLine($"{GetType().Name} starting.");
+            await Task.Delay(500);
+            Console.WriteLine($"{GetType().Name} started.");
         }
-        public override void Stop()
+        protected override sealed async Task StopInternal()
         {
-            Console.WriteLine("M1 (of M3) stop");
+            //Console.WriteLine($"{GetType().Name} stopping.");
+            await Task.Delay(500);
+            Console.WriteLine($"{GetType().Name} stopped.");
         }
     }
 
-    [ModuleDependency(typeof(M4))]
-    public sealed class M2 : ModuleBase
-    {
-        protected override void StartInternal()
-        {
-            Console.WriteLine("M2 (of M4) start");
-        }
-        public override void Stop()
-        {
-            Console.WriteLine("M2 (of M4) stop");
-        }
-    }
+    //[ModuleDependency(typeof(M3))]
+    public sealed class M1 : ModuleTestBase { }
+
+    [ModuleDependency(typeof(M1))]
+    public sealed class M2 : ModuleTestBase { }
+
+    [ModuleDependency(typeof(M1))]
+    public sealed class M3 : ModuleTestBase { }
+
     [ModuleDependency(typeof(M2))]
-    public sealed class M3 : ModuleBase
-    {
-        protected override void StartInternal()
-        {
-            Console.WriteLine("M3 (of M2) start");
-        }
-        public override void Stop()
-        {
-            Console.WriteLine("M3 (of M2) stop");
-        }
-    }
+    [ModuleDependency(typeof(M3))]
+    public sealed class M4 : ModuleTestBase { }
+
+    [ModuleDependency(typeof(M5))]
+    public sealed class M5 : ModuleTestBase { }
 
     [ModuleDependency(typeof(M4))]
-    public sealed class M4 : ModuleBase
-    {
-        protected override void StartInternal()
-        {
-            Console.WriteLine("M4 (of M4) start");
-        }
-        public override void Stop()
-        {
-            Console.WriteLine("M4 (of M4) stop");
-        }
+    public sealed class M6 : ModuleTestBase { }
 
-        public override bool IsRunning => true;
+    [ModuleDependency(typeof(M4))]
+    public sealed class M7 : ModuleTestBase { }
 
-        //internal M4() { }
-    }
+    [ModuleDependency(typeof(M4))]
+    public sealed class M8 : ModuleTestBase { }
+
+    [ModuleDependency(typeof(M6))]
+    [ModuleDependency(typeof(M7))]
+    [ModuleDependency(typeof(M8))]
+    [ModuleDependency(typeof(M1))]
+    [ModuleDependency(typeof(M5))]
+    public sealed class M9 : ModuleTestBase { }
+
+    [ModuleDependency(typeof(S2))]
+    public sealed class S1 : ModuleTestBase { }
+    [ModuleDependency(typeof(S1))]
+    public sealed class S2 : ModuleTestBase { }
+
 
     public static class Program
     {
+        public static ModuleManager m = new ModuleManager();
+
         internal static void Main(string[] args)
         {
-            ModuleManager m = new ModuleManager();
+            m.Start().GetAwaiter().GetResult();
 
-            m.Start();
-
+            Console.WriteLine("Any key to stop.");
+            Console.ReadKey(true);
             var m4 = m.TryGetModule<M4>();
 
-            m.Stop();
+            m.Shutdown().GetAwaiter().GetResult();
+
+            Console.WriteLine("Any key to exit?..");
+            Console.ReadKey(true);
+        }
+    }
+
+    class Foo : ModuleBase
+    {
+        protected override async Task StartInternal()
+        {
+            await Task.Delay(1000);
+            Console.WriteLine("Foo started.");
+        }
+        protected override Task StopInternal()
+        {
+            Console.WriteLine("Foo stopped.");
+            return Task.CompletedTask;
+        }
+    }
+
+    [ModuleDependency(typeof(Foo))]
+    class Bar : ModuleBase
+    {
+        protected override Task StartInternal()
+        {
+            Console.WriteLine("Bar started.");
+            return Task.CompletedTask;
+        }
+        protected override Task StopInternal()
+        {
+            Console.WriteLine("Bar stopped.");
+            return Task.CompletedTask;
         }
     }
 }
