@@ -1,9 +1,9 @@
 ﻿using AgentFire.Lifetime.Modules.Components;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
-using System.Threading;
 using System.Threading.Tasks;
 
 namespace AgentFire.Lifetime.Modules
@@ -120,12 +120,26 @@ namespace AgentFire.Lifetime.Modules
                 _isRunning = true;
             }
 
-            var data = await LoadDependencyGraph(assembliesWithModules).ConfigureAwait(false);
+            var (graph, moduleDic) = await LoadDependencyGraph(assembliesWithModules).ConfigureAwait(false);
 
-            _graph = data.graph;
-            _moduleDic = data.moduleDic;
+            _graph = graph;
+            _moduleDic = moduleDic;
 
-            await UseGraph(_graph.Graph, true).ConfigureAwait(false);
+            Task startup = UseGraph(_graph.Graph, true);
+
+            if (Debugger.IsAttached)
+            {
+                Task timeout = Task.Delay(TimeSpan.FromSeconds(30));
+
+                Task finished = await Task.WhenAny(startup, timeout).ConfigureAwait(false);
+
+                if (finished == timeout)
+                {
+                    Console.WriteLine("[DBG, ModuleManager] Startup is taking too long (30 seconds)... did you miss a deadlock?");
+                }
+            }
+
+            await startup.ConfigureAwait(false);
         }
 
         private static Task UseGraph(IReadOnlyList<DependencyItem<IModule>> graph, bool isStartMode)
@@ -165,8 +179,8 @@ namespace AgentFire.Lifetime.Modules
                 return t;
             }
 
-            var query = from di in graph
-                        select UseModule(di);
+            var query = (from di in graph
+                         select UseModule(di)).ToArray();
 
             return Task.WhenAll(query);
         }

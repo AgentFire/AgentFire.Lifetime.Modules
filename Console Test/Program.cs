@@ -10,14 +10,12 @@ namespace AgentFire.Lifetime.Modules.Test
     {
         protected override sealed async Task StartInternal()
         {
-            //Console.WriteLine($"{GetType().Name} starting.");
-            await Task.Delay(500);
+            await Task.Delay(600);
             Console.WriteLine($"{GetType().Name} started.");
         }
         protected override sealed async Task StopInternal()
         {
-            //Console.WriteLine($"{GetType().Name} stopping.");
-            await Task.Delay(500);
+            await Task.Delay(600);
             Console.WriteLine($"{GetType().Name} stopped.");
         }
     }
@@ -56,23 +54,22 @@ namespace AgentFire.Lifetime.Modules.Test
 
     [ModuleDependency(typeof(S2))]
     public sealed class S1 : ModuleTestBase { }
-    [ModuleDependency(typeof(S1))]
+    //[ModuleDependency(typeof(S1))] // Circular dependency deadlock test. Should just hang there.
     public sealed class S2 : ModuleTestBase { }
-
-
+    
     public static class Program
     {
         public static ModuleManager m = new ModuleManager();
 
-        internal static void Main(string[] args)
+        internal static async Task Main(string[] args)
         {
-            m.Start().GetAwaiter().GetResult();
+            await m.Start();
 
             Console.WriteLine("Any key to stop.");
             Console.ReadKey(true);
             var m4 = m.TryGetModule<M4>();
 
-            m.Shutdown().GetAwaiter().GetResult();
+            await m.Shutdown();
 
             Console.WriteLine("Any key to exit?..");
             Console.ReadKey(true);

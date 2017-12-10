@@ -41,6 +41,7 @@ namespace AgentFire.Lifetime.Modules
                 _isStartingOrStopping = true;
             }
 
+            string typename = GetType().Name;
             await StartInternal().ConfigureAwait(false);
 
             IsRunning = true;

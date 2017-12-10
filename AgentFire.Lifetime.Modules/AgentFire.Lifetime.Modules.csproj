@@ -43,11 +43,13 @@
     <Compile Include="Extensions.cs" />
     <Compile Include="IModule.cs" />
     <Compile Include="IDependencyResolverContext.cs" />
+    <Compile Include="LifetimeModuleBase.cs" />
     <Compile Include="ModuleBase.cs" />
     <Compile Include="ModuleDependencyAttribute.cs" />
     <Compile Include="ModuleManager.cs" />
     <Compile Include="DependencyResolverContext.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="SynchronousModuleBase.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Nuget Specs.nuspec">
