@@ -25,6 +25,8 @@ namespace AgentFire.Lifetime.Modules
 
         private async Task MaintainLifetime()
         {
+            await Task.Yield();
+
             try
             {
                 await LifetimeAsync().ConfigureAwait(false);

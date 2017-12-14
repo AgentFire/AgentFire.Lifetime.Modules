@@ -2,14 +2,14 @@
 <package>
   <metadata>
     <id>AgentFire.Lifetime.Modules</id>
-    <version>2.1</version>
+    <version>2.2</version>
     <title>Lifetime Modules</title>
     <authors>AgentFire</authors>
     <owners>AgentFire</owners>
     <projectUrl>https://github.com/AgentFire/AgentFire.Lifetime.Modules</projectUrl>
     <requireLicenseAcceptance>false</requireLicenseAcceptance>
     <description>Provides a way for an app to use module-based (Start/Stop) singleton instances.</description>
-    <releaseNotes>Added LifetimeModuleBase and SynchronousModuleBase abstract classes.</releaseNotes>
+    <releaseNotes>Added await Task.Yield(); at the start of the LifetimeAsync method so that async Start finishes before Lifetime can block the CPU, not that is wise or so.</releaseNotes>
     <tags>dependency start stop module lifetime</tags>
   </metadata>
 </package>
