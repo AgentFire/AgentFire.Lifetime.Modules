@@ -179,8 +179,8 @@ namespace AgentFire.Lifetime.Modules
                 return t;
             }
 
-            var query = (from di in graph
-                         select UseModule(di)).ToArray();
+            var query = from di in graph
+                        select UseModule(di);
 
             return Task.WhenAll(query);
         }
@@ -202,6 +202,14 @@ namespace AgentFire.Lifetime.Modules
             _moduleDic = null;
         }
 
-        public T TryGetModule<T>() where T : IModule => _moduleDic.TryGetValue(typeof(T), out IModule result) ? (T)result : default(T);
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <returns></returns>
+        public T TryGetModule<T>() where T : IModule
+        {
+            return _moduleDic.TryGetValue(typeof(T), out IModule result) ? (T)result : default;
+        }
     }
 }

@@ -61,9 +61,15 @@ namespace AgentFire.Lifetime.Modules.Test
     {
         public static ModuleManager m = new ModuleManager();
 
-        internal static async Task Main(string[] args)
+        internal static async Task Main()
         {
-            await m.Start();
+            try
+            {
+                await m.Start();
+            }
+            catch
+            {
+            }
 
             Console.WriteLine("Any key to stop.");
             Console.ReadKey(true);
@@ -81,7 +87,8 @@ namespace AgentFire.Lifetime.Modules.Test
         protected override async Task StartInternal()
         {
             await Task.Delay(1000);
-            Console.WriteLine("Foo started.");
+            throw new Exception();
+            //Console.WriteLine("Foo started.");
         }
         protected override Task StopInternal()
         {
