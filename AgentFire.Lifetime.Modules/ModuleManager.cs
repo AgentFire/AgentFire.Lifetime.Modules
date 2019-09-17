@@ -1,5 +1,4 @@
 ﻿using AgentFire.Lifetime.Modules.Components;
-using Nito.AsyncEx;
 using QuickGraph;
 using System;
 using System.Collections.Generic;
@@ -69,12 +68,20 @@ namespace AgentFire.Lifetime.Modules
             return StopInternal(token);
         }
 
-        private readonly AsyncLock _startStopLock = new AsyncLock();
-
         /// <summary>
         /// Indicates whether the manager is in Running state."
         /// </summary>
         public bool IsRunning { get; private set; } = false;
+
+        /// <summary>
+        /// Indicates where the manager is starting.
+        /// </summary>
+        public bool IsStarting { get; private set; } = false;
+
+        /// <summary>
+        /// Indicates where the manager is stopping.
+        /// </summary>
+        public bool IsStopping { get; private set; } = false;
 
         private DependencyGraph<IModule> _graph = null;
 
@@ -110,38 +117,36 @@ namespace AgentFire.Lifetime.Modules
         }
         private async Task StartWithModules(IEnumerable<Type> moduleTypes, CancellationToken token)
         {
-            using (await _startStopLock.LockAsync(token).ConfigureAwait(false))
-            {
-                if (IsRunning)
-                {
-                    throw new InvalidOperationException("Already running.");
-                }
+            IsStarting = true;
 
+            try
+            {
                 try
                 {
-                    try
-                    {
-                        _graph = await LoadDependencyGraph(moduleTypes, token).ConfigureAwait(false);
-                    }
-                    catch (NonAcyclicGraphException ex)
-                    {
-                        throw new InvalidOperationException("Your dependency graph is circular (cyclic).", ex);
-                    }
-                    catch (KeyNotFoundException ex)
-                    {
-                        throw new InvalidOperationException("Your dependency graph is not complete.", ex);
-                    }
-
-                    await UseGraph(_graph.Forward, T => T.Start(token)).ConfigureAwait(false);
+                    _graph = await LoadDependencyGraph(moduleTypes, token).ConfigureAwait(false);
                 }
-                catch
+                catch (NonAcyclicGraphException ex)
                 {
-                    ModuleResolver.Reset();
-                    throw;
+                    throw new InvalidOperationException("Your dependency graph is circular (cyclic).", ex);
+                }
+                catch (KeyNotFoundException ex)
+                {
+                    throw new InvalidOperationException("Your dependency graph is not complete.", ex);
                 }
 
-                IsRunning = true;
+                await UseGraph(_graph.Forward, T => T.Start(token)).ConfigureAwait(false);
             }
+            catch
+            {
+                ModuleResolver.Reset();
+                throw;
+            }
+            finally
+            {
+                IsStarting = false;
+            }
+
+            IsRunning = true;
         }
 
         private static Task UseGraph(IReadOnlyCollection<DependencyItem<IModule>> acyclicGraph, Func<IModule, Task> useAction)
@@ -182,40 +187,33 @@ namespace AgentFire.Lifetime.Modules
 
         private async Task StopInternal(CancellationToken token)
         {
-            using (await _startStopLock.LockAsync(token).ConfigureAwait(false))
-            {
-                if (!IsRunning)
-                {
-                    throw new InvalidOperationException("Not running.");
-                }
+            IsStopping = true;
 
-                try
-                {
-                    await UseGraph(_graph.Backward, T => T.Stop(token)).ConfigureAwait(false);
-                }
-                finally
-                {
-                    ModuleResolver.Reset();
-                    _graph = null;
-                    IsRunning = false;
-                }
+            try
+            {
+                await UseGraph(_graph.Backward, T => T.Stop(token)).ConfigureAwait(false);
+            }
+            finally
+            {
+                ModuleResolver.Reset();
+                _graph = null;
+
+                IsStopping = false;
+                IsRunning = false;
             }
         }
 
         /// <summary>
-        /// Returns a module instance, or null.
+        /// Returns a module instance, or null. Can be run from within your Start methods.
         /// </summary>
         public T TryGetModule<T>() where T : IModule
         {
-            lock (_startStopLock)
+            if (!IsStarting && !IsRunning && !IsStopping)
             {
-                if (!IsRunning)
-                {
-                    return default;
-                }
-
-                return ModuleResolver.TryGet<T>();
+                return default;
             }
+
+            return ModuleResolver.TryGet<T>();
         }
     }
 }

@@ -42,9 +42,10 @@
     <Reference Include="System.Core" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="CancellationTest.cs" />
-    <Compile Include="ExceptionsTest.cs" />
-    <Compile Include="StartupOrderTest.cs" />
+    <Compile Include="CancellationTests.cs" />
+    <Compile Include="ExceptionsTests.cs" />
+    <Compile Include="DependencyTests.cs" />
+    <Compile Include="StartupOrderTests.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>

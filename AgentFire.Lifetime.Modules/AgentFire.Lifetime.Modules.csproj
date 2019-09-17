@@ -5,7 +5,7 @@
     <Company>AgentFire</Company>
     <Authors>AgentFire</Authors>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-    <Version>3.0</Version>
+    <Version>3.0.1</Version>
     <Description>Provides a way for an app to use module-based (Start/Stop) singleton instances.</Description>
     <PackageLicenseExpression></PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/AgentFire/AgentFire.Lifetime.Modules</PackageProjectUrl>
@@ -36,14 +36,7 @@
     <None Remove="AgentFire.Lifetime.Modules.2.2.0.nupkg" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="Nuget Specs.nuspec">
-      <SubType>Designer</SubType>
-    </None>
-  </ItemGroup>
-  <ItemGroup>
-    <PackageReference Include="Nito.AsyncEx.Coordination" Version="5.0.0" />
     <PackageReference Include="QuickGraph.NETStandard" Version="3.8.0" />
-    <PackageReference Include="System.Threading.Tasks.Extensions" Version="4.5.3" />
   </ItemGroup>
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
        Other similar extension points exist, see Microsoft.Common.targets.

@@ -33,9 +33,6 @@ namespace AgentFire.Lifetime.Modules
         /// </summary>
         protected ModuleBase() { }
 
-        private readonly object _startStopLock = new object();
-        private bool _isStartingOrStopping = false;
-
         /// <summary>
         /// Your startup implementation. Base implementation returns <see cref="Task.CompletedTask"/>
         /// </summary>
@@ -51,20 +48,9 @@ namespace AgentFire.Lifetime.Modules
         /// </summary>
         public async Task Start(CancellationToken token = default)
         {
-            lock (_startStopLock)
-            {
-                if (IsRunning && _isStartingOrStopping)
-                {
-                    throw new InvalidOperationException("Your previous call on this method has not yet finished.");
-                }
-
-                _isStartingOrStopping = true;
-            }
-
             await StartInternal(token).ConfigureAwait(false);
 
             IsRunning = true;
-            _isStartingOrStopping = false;
         }
 
         /// <summary>
@@ -72,20 +58,9 @@ namespace AgentFire.Lifetime.Modules
         /// </summary>
         public async Task Stop(CancellationToken token = default)
         {
-            lock (_startStopLock)
-            {
-                if (!IsRunning && _isStartingOrStopping)
-                {
-                    throw new InvalidOperationException("Your previous call on this method has not yet finished.");
-                }
-
-                _isStartingOrStopping = true;
-            }
-
             await StopInternal(token).ConfigureAwait(false);
 
             IsRunning = false;
-            _isStartingOrStopping = false;
         }
     }
 }
