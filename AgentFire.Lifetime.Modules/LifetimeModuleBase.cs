@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace AgentFire.Lifetime.Modules
@@ -9,37 +10,55 @@ namespace AgentFire.Lifetime.Modules
     public abstract class LifetimeModuleBase : ModuleBase
     {
         private Task _lifetimeTask = null;
+        private CancellationTokenSource _cancelSource;
 
         /// <summary>
-        /// Don't forget to call this base method when overriding, since it launches the <see cref="LifetimeAsync"/> method.
+        /// Don't forget to call this base method when overriding, since it launches the <see cref="LifetimeAsync"/> method and returns immediately after.
         /// </summary>
-        protected override Task StartInternal()
+        protected override Task StartInternal(CancellationToken token)
         {
-            _lifetimeTask = MaintainLifetime();
-            return base.StartInternal();
+            _cancelSource = new CancellationTokenSource();
+
+            _lifetimeTask = MaintainLifetime(_cancelSource.Token);
+
+            return base.StartInternal(token);
         }
-        /// <summary>
-        /// Don't forget this base method when overriding (in the end), since it finishes its task when the <see cref="LifetimeAsync"/> method finishes.
-        /// </summary>
-        protected override Task StopInternal() => _lifetimeTask ?? Task.CompletedTask;
 
-        private async Task MaintainLifetime()
+        /// <summary>
+        /// Don't forget to call base method at the end of your method when (and only if) overriding.
+        /// </summary>
+        protected override async Task StopInternal(CancellationToken token)
         {
-            await Task.Yield();
+            _cancelSource.Cancel();
 
             try
             {
-                await LifetimeAsync().ConfigureAwait(false);
+                await _lifetimeTask.ConfigureAwait(false);
             }
-            catch (OperationCanceledException)
+            finally
             {
-                // User cancellation is OK.   
+                _cancelSource.Dispose();
+
+                _lifetimeTask?.Dispose();
+                _lifetimeTask = null;
+            }
+        }
+
+        private async Task MaintainLifetime(CancellationToken token)
+        {
+            try
+            {
+                await LifetimeAsync(token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException ex) when (ex.CancellationToken == token)
+            {
+                // The cancellation is handled.
             }
         }
 
         /// <summary>
-        /// You can throw <see cref="OperationCanceledException"/> in this method.
+        /// You can throw <see cref="OperationCanceledException"/> in this method, but you must include the <see cref="CancellationToken"/> parameter inside the exception object.
         /// </summary>
-        protected abstract Task LifetimeAsync();
+        protected abstract Task LifetimeAsync(CancellationToken token);
     }
 }

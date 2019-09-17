@@ -17,9 +17,17 @@ namespace AgentFire.Lifetime.Modules
             ModuleType = Module.GetType();
         }
 
+        private void Add(Type type)
+        {
+            if (!_requiredDependencies.Add(type))
+            {
+                throw new ArgumentException("Why would you depend on the same type twice?..");
+            }
+        }
+
         void IDependencyResolverContext.RequireDependency<T>()
         {
-            _requiredDependencies.Add(typeof(T));
+            Add(typeof(T));
         }
         void IDependencyResolverContext.RequireDependency(Type moduleType)
         {
@@ -35,10 +43,10 @@ namespace AgentFire.Lifetime.Modules
 
             if (moduleType == Module.GetType())
             {
-                return;
+                throw new ArgumentException($"A type cannot depend on itself.", nameof(moduleType));
             }
 
-            _requiredDependencies.Add(moduleType);
+            Add(moduleType);
         }
     }
 }

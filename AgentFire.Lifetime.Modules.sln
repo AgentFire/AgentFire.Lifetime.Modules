@@ -5,8 +5,6 @@ VisualStudioVersion = 16.0.29306.81
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AgentFire.Lifetime.Modules", "AgentFire.Lifetime.Modules\AgentFire.Lifetime.Modules.csproj", "{2A572465-A6E8-41D1-A67D-5C811DEA79D5}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Console Test", "Console Test\Console Test.csproj", "{FE905C84-0B2F-47B8-94E9-31DE863AD4A2}"
-EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Unit Tests", "Unit Tests\Unit Tests.csproj", "{DD785C6A-239A-4FA8-89AD-1A52F44E5073}"
 EndProject
 Global
@@ -19,10 +17,6 @@ Global
 		{2A572465-A6E8-41D1-A67D-5C811DEA79D5}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{2A572465-A6E8-41D1-A67D-5C811DEA79D5}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{2A572465-A6E8-41D1-A67D-5C811DEA79D5}.Release|Any CPU.Build.0 = Release|Any CPU
-		{FE905C84-0B2F-47B8-94E9-31DE863AD4A2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{FE905C84-0B2F-47B8-94E9-31DE863AD4A2}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{FE905C84-0B2F-47B8-94E9-31DE863AD4A2}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{FE905C84-0B2F-47B8-94E9-31DE863AD4A2}.Release|Any CPU.Build.0 = Release|Any CPU
 		{DD785C6A-239A-4FA8-89AD-1A52F44E5073}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{DD785C6A-239A-4FA8-89AD-1A52F44E5073}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{DD785C6A-239A-4FA8-89AD-1A52F44E5073}.Release|Any CPU.ActiveCfg = Release|Any CPU

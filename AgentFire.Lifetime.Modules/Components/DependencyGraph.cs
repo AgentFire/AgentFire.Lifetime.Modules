@@ -1,42 +1,68 @@
-﻿using System;
+﻿using QuickGraph;
+using QuickGraph.Algorithms.TopologicalSort;
+using System;
 using System.Collections.Generic;
 
 namespace AgentFire.Lifetime.Modules.Components
 {
     internal sealed class DependencyGraph<T>
     {
-        public IReadOnlyList<DependencyItem<T>> Graph => _items;
-        private readonly List<DependencyItem<T>> _items = new List<DependencyItem<T>>();
+        public IReadOnlyCollection<DependencyItem<T>> Forward { get; }
+        public IReadOnlyCollection<DependencyItem<T>> Backward { get; }
 
-        public IReadOnlyList<DependencyItem<T>> ReversedGraph => _reversed;
-        private readonly List<DependencyItem<T>> _reversed = new List<DependencyItem<T>>();
-
+        /// <exception cref="NonAcyclicGraphException" />
+        /// <exception cref="KeyNotFoundException" />
         public DependencyGraph(IEnumerable<T> source, Func<T, IEnumerable<T>> dependencyResolver)
         {
-            Dictionary<T, DependencyItem<T>> dic = new Dictionary<T, DependencyItem<T>>();
-            DependencyItem<T> DicItem(T item) => dic.GetOrCreate(item, () => new DependencyItem<T>(item, new List<DependencyItem<T>>()));
+            var graph = new AdjacencyGraph<T, Edge<T>>();
 
-            Dictionary<T, DependencyItem<T>> dicReversed = new Dictionary<T, DependencyItem<T>>();
-            DependencyItem<T> DicReversedItem(T item) => dicReversed.GetOrCreate(item, () => new DependencyItem<T>(item, new List<DependencyItem<T>>()));
+            var dic = new Dictionary<T, DependencyItem<T>>();
+            var dicReversed = new Dictionary<T, DependencyItem<T>>();
+            var builders = new Dictionary<DependencyItem<T>, DependencyItemLiveBuilder<T>>();
+
+            DependencyItem<T> DicItem(T item, bool useReversed) => (useReversed ? dicReversed : dic).GetOrCreate(item, () =>
+            {
+                var builder = new DependencyItemLiveBuilder<T>(item);
+                builders[builder.Item] = builder;
+                return builder.Item;
+            });
+
+            void Add(DependencyItem<T> store, DependencyItem<T> item) => builders[store].AddDependency(item);
 
             foreach (T module in source)
             {
-                DependencyItem<T> dependentModule = DicItem(module);
-                DependencyItem<T> reversedDependentModule = DicReversedItem(module);
-                var list = (List<DependencyItem<T>>)dependentModule.DependsOn;
+                graph.AddVertex(module);
+
+                DependencyItem<T> dependentModule = DicItem(module, false);
+                DependencyItem<T> reversedDependentModule = DicItem(module, true);
 
                 foreach (T dep in dependencyResolver(module))
                 {
-                    list.Add(DicItem(dep));
+                    graph.AddEdge(new Edge<T>(module, dep));
 
-                    DependencyItem<T> rDep = DicReversedItem(dep);
-                    var reversedList = (List<DependencyItem<T>>)rDep.DependsOn;
-                    reversedList.Add(reversedDependentModule);
+                    // Forward dependency.
+                    Add(dependentModule, DicItem(dep, false));
+
+                    // Backward dependency.
+                    Add(DicItem(dep, true), reversedDependentModule);
                 }
             }
 
-            _items.AddRange(dic.Values);
-            _reversed.AddRange(dicReversed.Values);
+            try
+            {
+                new TopologicalSortAlgorithm<T, Edge<T>>(graph).Compute();
+            }
+            catch (NonAcyclicGraphException)
+            {
+                throw;
+            }
+            catch (KeyNotFoundException)
+            {
+                throw;
+            }
+
+            Forward = dic.Values;
+            Backward = dicReversed.Values;
         }
     }
 }

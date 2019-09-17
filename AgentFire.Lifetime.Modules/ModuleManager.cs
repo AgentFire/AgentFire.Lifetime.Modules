@@ -1,9 +1,12 @@
 ﻿using AgentFire.Lifetime.Modules.Components;
+using Nito.AsyncEx;
+using QuickGraph;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace AgentFire.Lifetime.Modules
@@ -12,137 +15,136 @@ namespace AgentFire.Lifetime.Modules
     /// Provides a single-threaded way to start and stop your modules, which implement <see cref="IModule"/>.
     /// Only non-abstract modules with public parameterless constructors will be used.
     /// </summary>
+    /// <remarks>
+    /// Exceptions thrown inside Start or Stop methods may leave your Modules in an undetermined states. Get rid of them in the dev stage.
+    /// </remarks>
     public sealed class ModuleManager
     {
         /// <summary>
+        /// Allows consumer to resolve <see cref="IModule"/> instances in their custom ways.
+        /// </summary>
+        public IModuleResolver ModuleResolver { get; set; } = new DefaultModuleResolver();
+
+        /// <summary>
         /// Starts all Auto-Start modules from a calling assembly.
         /// </summary>
-        public Task Start()
+        public Task Start(CancellationToken token = default)
         {
-            return Start(Assembly.GetCallingAssembly());
+            return Start(Assembly.GetCallingAssembly(), token);
+        }
+        /// <summary>
+        /// Starts all Auto-Start modules from a calling assembly.
+        /// </summary>
+        public Task Start(CancellationToken token = default, params Type[] modules)
+        {
+            return StartWithModules(modules, token);
         }
         /// <summary>
         /// Starts all Auto-Start modules from a specified assembly.
         /// </summary>
-        public Task Start(Assembly assemblyWithModules)
+        public Task Start(Assembly assemblyWithModules, CancellationToken token = default)
         {
-            return Start(new[] { assemblyWithModules });
+            return Start(new[] { assemblyWithModules }, token);
         }
         /// <summary>
         /// Starts all Auto-Start modules from a specified set of assemblies.
         /// </summary>
-        public Task Start(params Assembly[] assembliesWithModules)
+        public Task Start(CancellationToken token = default, params Assembly[] assembliesWithModules)
         {
-            return StartInternal(assembliesWithModules);
+            return StartWithAssemblies(assembliesWithModules, token);
         }
         /// <summary>
         /// Starts all Auto-Start modules from a specified set of assemblies.
         /// </summary>
-        public Task Start(IEnumerable<Assembly> assembliesWithModules)
+        public Task Start(IEnumerable<Assembly> assembliesWithModules, CancellationToken token = default)
         {
-            return StartInternal(assembliesWithModules);
+            return StartWithAssemblies(assembliesWithModules, token);
         }
 
         /// <summary>
         /// Stops all running modules.
         /// </summary>
-        public Task Shutdown()
+        public Task Shutdown(CancellationToken token = default)
         {
-            return StopInternal();
+            return StopInternal(token);
         }
 
-        private bool _isRunning = false;
-        private readonly object _startStopLock = new object();
+        private readonly AsyncLock _startStopLock = new AsyncLock();
 
-        private Dictionary<Type, IModule> _moduleDic = null;
+        /// <summary>
+        /// Indicates whether the manager is in Running state."
+        /// </summary>
+        public bool IsRunning { get; private set; } = false;
+
         private DependencyGraph<IModule> _graph = null;
 
-        private static async Task<(DependencyGraph<IModule> graph, Dictionary<Type, IModule> moduleDic)> LoadDependencyGraph(IEnumerable<Assembly> assembliesWithModules)
+        /// <exception cref="NonAcyclicGraphException" />
+        /// <exception cref="KeyNotFoundException" />
+        private async Task<DependencyGraph<IModule>> LoadDependencyGraph(IEnumerable<Type> moduleTypes, CancellationToken token)
         {
             Dictionary<Type, IModule> dic = new Dictionary<Type, IModule>();
 
-            IModule TryInstantiateAsModule(Type type)
-            {
-                lock (dic)
-                {
-                    if (dic.TryGetValue(type, out IModule m))
-                    {
-                        return m;
-                    }
-
-                    if (type.IsAbstract || !typeof(IModule).IsAssignableFrom(type))
-                    {
-                        return null;
-                    }
-
-                    ConstructorInfo c = type.GetConstructor(Type.EmptyTypes);
-
-                    if (c == null)
-                    {
-                        return null;
-                    }
-
-                    m = (IModule)c.Invoke(null);
-                    dic[type] = m;
-                    return m;
-                }
-            }
-
-            var query = from ass in assembliesWithModules
-                        from type in ass.DefinedTypes
-                        let i = TryInstantiateAsModule(type)
+            var query = from type in moduleTypes
+                        let i = ModuleResolver.TryGet(type)
                         where i != null
                         let context = new DependencyResolverContext(i)
-                        select i.ResolveDependencies(context).ContinueWith(_ => new
+                        select i.ResolveDependencies(context, token).ContinueWith(_ => new
                         {
                             Module = i,
                             DependsOn = (from d in context.RequiredDependencies
-                                         let di = TryInstantiateAsModule(d)
+                                         let di = ModuleResolver.TryGet(d)
                                          where di != null
                                          select di).ToList()
                         });
 
             var qResult = await Task.WhenAll(query).ConfigureAwait(false);
+
             Dictionary<IModule, List<IModule>> graphDic = qResult.ToDictionary(T => T.Module, T => T.DependsOn);
 
-            return (new DependencyGraph<IModule>(graphDic.Select(T => T.Key), T => graphDic[T]), dic);
+            return new DependencyGraph<IModule>(graphDic.Select(T => T.Key), T => graphDic[T]);
         }
 
-        private async Task StartInternal(IEnumerable<Assembly> assembliesWithModules)
+        private Task StartWithAssemblies(IEnumerable<Assembly> assembliesWithModules, CancellationToken token)
         {
-            lock (_startStopLock)
+            return StartWithModules(assembliesWithModules.SelectMany(T => T.DefinedTypes), token);
+        }
+        private async Task StartWithModules(IEnumerable<Type> moduleTypes, CancellationToken token)
+        {
+            using (await _startStopLock.LockAsync(token).ConfigureAwait(false))
             {
-                if (_isRunning)
+                if (IsRunning)
                 {
                     throw new InvalidOperationException("Already running.");
                 }
 
-                _isRunning = true;
-            }
-
-            var (graph, moduleDic) = await LoadDependencyGraph(assembliesWithModules).ConfigureAwait(false);
-
-            _graph = graph;
-            _moduleDic = moduleDic;
-
-            Task startup = UseGraph(_graph.Graph, true);
-
-            if (Debugger.IsAttached)
-            {
-                Task timeout = Task.Delay(TimeSpan.FromSeconds(30));
-
-                Task finished = await Task.WhenAny(startup, timeout).ConfigureAwait(false);
-
-                if (finished == timeout)
+                try
                 {
-                    Console.WriteLine("[DBG, ModuleManager] Startup is taking too long (30 seconds)... did you miss a deadlock?");
-                }
-            }
+                    try
+                    {
+                        _graph = await LoadDependencyGraph(moduleTypes, token).ConfigureAwait(false);
+                    }
+                    catch (NonAcyclicGraphException ex)
+                    {
+                        throw new InvalidOperationException("Your dependency graph is circular (cyclic).", ex);
+                    }
+                    catch (KeyNotFoundException ex)
+                    {
+                        throw new InvalidOperationException("Your dependency graph is not complete.", ex);
+                    }
 
-            await startup.ConfigureAwait(false);
+                    await UseGraph(_graph.Forward, T => T.Start(token)).ConfigureAwait(false);
+                }
+                catch
+                {
+                    ModuleResolver.Reset();
+                    throw;
+                }
+
+                IsRunning = true;
+            }
         }
 
-        private static Task UseGraph(IReadOnlyList<DependencyItem<IModule>> graph, bool isStartMode)
+        private static Task UseGraph(IReadOnlyCollection<DependencyItem<IModule>> acyclicGraph, Func<IModule, Task> useAction)
         {
             Dictionary<IModule, Task> _dic = new Dictionary<IModule, Task>();
 
@@ -163,14 +165,7 @@ namespace AgentFire.Lifetime.Modules
 
                                 await Task.WhenAll(q).ConfigureAwait(false);
 
-                                if (isStartMode)
-                                {
-                                    await di.Value.Start().ConfigureAwait(false);
-                                }
-                                else
-                                {
-                                    await di.Value.Stop().ConfigureAwait(false);
-                                }
+                                await useAction(di.Value).ConfigureAwait(false);
                             });
                         }
                     }
@@ -179,37 +174,48 @@ namespace AgentFire.Lifetime.Modules
                 return t;
             }
 
-            var query = from di in graph
+            var query = from di in acyclicGraph
                         select UseModule(di);
 
             return Task.WhenAll(query);
         }
 
-        private async Task StopInternal()
+        private async Task StopInternal(CancellationToken token)
         {
-            lock (_startStopLock)
+            using (await _startStopLock.LockAsync(token).ConfigureAwait(false))
             {
-                if (!_isRunning)
+                if (!IsRunning)
                 {
                     throw new InvalidOperationException("Not running.");
                 }
 
-                _isRunning = false;
+                try
+                {
+                    await UseGraph(_graph.Backward, T => T.Stop(token)).ConfigureAwait(false);
+                }
+                finally
+                {
+                    ModuleResolver.Reset();
+                    _graph = null;
+                    IsRunning = false;
+                }
             }
-
-            await UseGraph(_graph.ReversedGraph, false).ConfigureAwait(false);
-            _graph = null;
-            _moduleDic = null;
         }
 
         /// <summary>
-        /// 
+        /// Returns a module instance, or null.
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <returns></returns>
         public T TryGetModule<T>() where T : IModule
         {
-            return _moduleDic.TryGetValue(typeof(T), out IModule result) ? (T)result : default;
+            lock (_startStopLock)
+            {
+                if (!IsRunning)
+                {
+                    return default;
+                }
+
+                return ModuleResolver.TryGet<T>();
+            }
         }
     }
 }
